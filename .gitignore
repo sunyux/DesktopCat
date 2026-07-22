@@ -1,0 +1,6 @@
+.build/
+dist/
+.DS_Store
+Assets/generated-strips/
+Assets/references/
+scripts/make-interaction-gifs.py
