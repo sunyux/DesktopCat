@@ -8,9 +8,11 @@ A native macOS desktop pet featuring Julie-LaoTai, with a local to-do list and P
 
 - A transparent, always-on-top desktop cat that rests and occasionally walks
 - Drag to move, scroll to resize, click for a belly rub, and double-click to wave
-- Persistent to-do list
-- 25/5 Pomodoro timer with pause, reset, sound, and restored progress
+- Persistent folder-based to-do list
+- Pomodoro timer with custom focus/break minutes, pause, reset, sound, and restored progress
 - Attached productivity panel and complete menu-bar user menu
+- Automatic English/Chinese UI based on the macOS language
+- Custom pets from one image or a complete DesktopCat animation pack
 - Local-only storage with no analytics, accounts, or network access
 
 ## Download

@@ -1,5 +1,6 @@
 import AppKit
 import QuartzCore
+import UniformTypeIdentifiers
 
 private enum PetAnimation: String, CaseIterable {
     case idle
@@ -20,6 +21,12 @@ private enum PetMode {
     case idle
     case walking
     case special
+}
+
+private enum PetAppearanceMode: String {
+    case julie
+    case staticImage
+    case animationPack
 }
 
 private final class PetPanel: NSPanel {
@@ -205,6 +212,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         static let petSize = "desktopCat.pet.size"
         static let petOriginX = "desktopCat.pet.originX"
         static let petOriginY = "desktopCat.pet.originY"
+        static let appearanceMode = "desktopCat.pet.appearanceMode"
     }
 
     private let minimumPetSize: CGFloat = 140
@@ -225,9 +233,11 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isPaused = false
     private var isDragging = false
     private var petDimension: CGFloat = 220
+    private var appearanceMode: PetAppearanceMode = .julie
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        restoreAppearanceMode()
         restorePetSize()
         createPanel()
         createProductivityPanel()
@@ -331,52 +341,107 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func createStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.title = "🐾 Julie"
+        statusItem.button?.title = "🐾 DesktopCat"
         statusItem.menu = buildUserMenu()
     }
 
     private func buildUserMenu() -> NSMenu {
         let menu = NSMenu()
 
-        let header = NSMenuItem(title: "Julie-LaoTai", action: nil, keyEquivalent: "")
+        let header = NSMenuItem(title: "DesktopCat", action: nil, keyEquivalent: "")
         header.isEnabled = false
         menu.addItem(header)
         menu.addItem(.separator())
 
-        let interactionItem = NSMenuItem(title: "互动", action: nil, keyEquivalent: "")
-        let interactionMenu = NSMenu(title: "互动")
-        interactionMenu.addItem(menuItem("摸摸肚子", action: #selector(touchBelly)))
-        interactionMenu.addItem(menuItem("招招手", action: #selector(wave)))
-        interactionMenu.addItem(menuItem("现在休息", action: #selector(restNow)))
+        let interactionTitle = L10n.text("互动", "Interactions")
+        let interactionItem = NSMenuItem(title: interactionTitle, action: nil, keyEquivalent: "")
+        let interactionMenu = NSMenu(title: interactionTitle)
+        interactionMenu.addItem(
+            menuItem(L10n.text("摸摸肚子", "Belly rub"), action: #selector(touchBelly))
+        )
+        interactionMenu.addItem(
+            menuItem(L10n.text("招招手", "Wave"), action: #selector(wave))
+        )
+        interactionMenu.addItem(
+            menuItem(L10n.text("现在休息", "Rest now"), action: #selector(restNow))
+        )
         interactionItem.submenu = interactionMenu
         menu.addItem(interactionItem)
 
-        let toolsItem = NSMenuItem(title: "效率工具", action: nil, keyEquivalent: "")
-        let toolsMenu = NSMenu(title: "效率工具")
-        toolsMenu.addItem(menuItem("待办清单", action: #selector(openTodo)))
-        toolsMenu.addItem(menuItem("番茄钟", action: #selector(openPomodoro)))
+        let toolsTitle = L10n.text("效率工具", "Productivity")
+        let toolsItem = NSMenuItem(title: toolsTitle, action: nil, keyEquivalent: "")
+        let toolsMenu = NSMenu(title: toolsTitle)
+        toolsMenu.addItem(
+            menuItem(L10n.text("待办清单", "To-do list"), action: #selector(openTodo))
+        )
+        toolsMenu.addItem(
+            menuItem(L10n.text("番茄钟", "Pomodoro timer"), action: #selector(openPomodoro))
+        )
         toolsItem.submenu = toolsMenu
         menu.addItem(toolsItem)
 
-        let sizeItem = NSMenuItem(title: "Julie 大小", action: nil, keyEquivalent: "")
-        let sizeMenu = NSMenu(title: "Julie 大小")
-        sizeMenu.addItem(sizeMenuItem("小", dimension: 160))
-        sizeMenu.addItem(sizeMenuItem("中", dimension: 220))
-        sizeMenu.addItem(sizeMenuItem("大", dimension: 300))
+        let appearanceTitle = L10n.text("宠物外观", "Pet appearance")
+        let appearanceItem = NSMenuItem(title: appearanceTitle, action: nil, keyEquivalent: "")
+        let appearanceMenu = NSMenu(title: appearanceTitle)
+        appearanceMenu.addItem(
+            menuItem(
+                L10n.text("选择单张图片…", "Choose a single image…"),
+                action: #selector(chooseStaticPetImage)
+            )
+        )
+        appearanceMenu.addItem(
+            menuItem(
+                L10n.text("导入动画包文件夹…", "Import animation-pack folder…"),
+                action: #selector(importAnimationPack)
+            )
+        )
+        appearanceMenu.addItem(.separator())
+        appearanceMenu.addItem(
+            menuItem(
+                L10n.text("恢复 Julie", "Restore Julie"),
+                action: #selector(restoreJulieAppearance)
+            )
+        )
+        appearanceItem.submenu = appearanceMenu
+        menu.addItem(appearanceItem)
+
+        let sizeTitle = L10n.text("宠物大小", "Pet size")
+        let sizeItem = NSMenuItem(title: sizeTitle, action: nil, keyEquivalent: "")
+        let sizeMenu = NSMenu(title: sizeTitle)
+        sizeMenu.addItem(sizeMenuItem(L10n.text("小", "Small"), dimension: 160))
+        sizeMenu.addItem(sizeMenuItem(L10n.text("中", "Medium"), dimension: 220))
+        sizeMenu.addItem(sizeMenuItem(L10n.text("大", "Large"), dimension: 300))
         sizeItem.submenu = sizeMenu
         menu.addItem(sizeItem)
 
         menu.addItem(menuItem(
-            isPaused ? "继续走动" : "暂停走动",
+            isPaused
+                ? L10n.text("继续走动", "Resume movement")
+                : L10n.text("暂停走动", "Pause movement"),
             action: #selector(togglePause(_:))
         ))
-        menu.addItem(menuItem("回到屏幕中央", action: #selector(resetPosition)))
+        menu.addItem(
+            menuItem(
+                L10n.text("回到屏幕中央", "Move to screen center"),
+                action: #selector(resetPosition)
+            )
+        )
 
         menu.addItem(.separator())
-        menu.addItem(menuItem("使用说明", action: #selector(showUserGuide)))
-        menu.addItem(menuItem("关于 DesktopCat", action: #selector(showAbout)))
+        menu.addItem(
+            menuItem(L10n.text("使用说明", "User guide"), action: #selector(showUserGuide))
+        )
+        menu.addItem(
+            menuItem(L10n.text("关于 DesktopCat", "About DesktopCat"), action: #selector(showAbout))
+        )
         menu.addItem(.separator())
-        menu.addItem(menuItem("退出 DesktopCat", action: #selector(quit), keyEquivalent: "q"))
+        menu.addItem(
+            menuItem(
+                L10n.text("退出 DesktopCat", "Quit DesktopCat"),
+                action: #selector(quit),
+                keyEquivalent: "q"
+            )
+        )
 
         return menu
     }
@@ -507,12 +572,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         currentAnimation = animation
 
         guard
-            let resourceURL = Bundle.main.resourceURL,
-            let image = NSImage(
-                contentsOf: resourceURL
-                    .appendingPathComponent("animations")
-                    .appendingPathComponent("\(animation.rawValue).gif")
-            )
+            let animationURL = animationURL(for: animation),
+            let image = NSImage(contentsOf: animationURL)
         else {
             showMissingAssetAlert(animation)
             return
@@ -525,6 +586,64 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         petView.imageView.layer?.add(transition, forKey: "petAnimationFade")
         petView.imageView.image = image
         petView.imageView.animates = true
+    }
+
+    private var customPetDirectory: URL {
+        let base = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        )[0]
+        return base
+            .appendingPathComponent("DesktopCat", isDirectory: true)
+            .appendingPathComponent("CustomPet", isDirectory: true)
+    }
+
+    private func animationURL(for animation: PetAnimation) -> URL? {
+        let fileManager = FileManager.default
+
+        switch appearanceMode {
+        case .staticImage:
+            if
+                let files = try? fileManager.contentsOfDirectory(
+                    at: customPetDirectory,
+                    includingPropertiesForKeys: nil
+                ),
+                let image = files.first(where: { $0.lastPathComponent.hasPrefix("static-pet.") })
+            {
+                return image
+            }
+        case .animationPack:
+            let customAnimation = customPetDirectory
+                .appendingPathComponent("animations", isDirectory: true)
+                .appendingPathComponent("\(animation.rawValue).gif")
+            if fileManager.fileExists(atPath: customAnimation.path) {
+                return customAnimation
+            }
+        case .julie:
+            break
+        }
+
+        return Bundle.main.resourceURL?
+            .appendingPathComponent("animations")
+            .appendingPathComponent("\(animation.rawValue).gif")
+    }
+
+    private func restoreAppearanceMode() {
+        appearanceMode = PetAppearanceMode(
+            rawValue: UserDefaults.standard.string(forKey: DefaultsKey.appearanceMode) ?? ""
+        ) ?? .julie
+    }
+
+    private func saveAppearanceMode() {
+        UserDefaults.standard.set(
+            appearanceMode.rawValue,
+            forKey: DefaultsKey.appearanceMode
+        )
+    }
+
+    private func reloadAppearance() {
+        currentAnimation = nil
+        enterIdle(for: 20.0)
     }
 
     private func toggleProductivityPanel(_ tab: ProductivityTab) {
@@ -638,15 +757,20 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showMissingAssetAlert(_ animation: PetAnimation) {
         let alert = NSAlert()
-        alert.messageText = "找不到 Julie 的动画"
-        alert.informativeText = "缺少 animations/\(animation.rawValue).gif"
+        alert.messageText = L10n.text("找不到宠物动画", "Pet animation not found")
+        alert.informativeText = L10n.text(
+            "缺少 animations/\(animation.rawValue).gif",
+            "Missing animations/\(animation.rawValue).gif"
+        )
         alert.alertStyle = .warning
         alert.runModal()
     }
 
     @objc private func togglePause(_ sender: NSMenuItem?) {
         isPaused.toggle()
-        sender?.title = isPaused ? "继续走动" : "暂停走动"
+        sender?.title = isPaused
+            ? L10n.text("继续走动", "Resume movement")
+            : L10n.text("暂停走动", "Pause movement")
         if isPaused {
             setAnimation(.idle)
         } else {
@@ -677,6 +801,113 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         toggleProductivityPanel(.timer)
     }
 
+    @objc private func chooseStaticPetImage() {
+        let picker = NSOpenPanel()
+        picker.title = L10n.text("选择宠物图片", "Choose a pet image")
+        picker.message = L10n.text(
+            "推荐使用透明背景的 PNG 图片。",
+            "A PNG with a transparent background works best."
+        )
+        picker.allowedContentTypes = [.png, .jpeg, .gif]
+        picker.canChooseFiles = true
+        picker.canChooseDirectories = false
+        picker.allowsMultipleSelection = false
+
+        guard picker.runModal() == .OK, let source = picker.url else { return }
+
+        do {
+            let fileManager = FileManager.default
+            try fileManager.createDirectory(
+                at: customPetDirectory,
+                withIntermediateDirectories: true
+            )
+
+            if let files = try? fileManager.contentsOfDirectory(
+                at: customPetDirectory,
+                includingPropertiesForKeys: nil
+            ) {
+                for file in files where file.lastPathComponent.hasPrefix("static-pet.") {
+                    try? fileManager.removeItem(at: file)
+                }
+            }
+
+            let destination = customPetDirectory.appendingPathComponent(
+                "static-pet.\(source.pathExtension.lowercased())"
+            )
+            try fileManager.copyItem(at: source, to: destination)
+            appearanceMode = .staticImage
+            saveAppearanceMode()
+            reloadAppearance()
+        } catch {
+            showImportError(error.localizedDescription)
+        }
+    }
+
+    @objc private func importAnimationPack() {
+        let picker = NSOpenPanel()
+        picker.title = L10n.text("选择动画包文件夹", "Choose an animation-pack folder")
+        picker.message = L10n.text(
+            "文件夹必须包含 DesktopCat 的全部 GIF 动画文件。",
+            "The folder must contain every DesktopCat GIF animation."
+        )
+        picker.canChooseFiles = false
+        picker.canChooseDirectories = true
+        picker.allowsMultipleSelection = false
+
+        guard picker.runModal() == .OK, let sourceFolder = picker.url else { return }
+
+        let requiredFiles = PetAnimation.allCases.map { "\($0.rawValue).gif" }
+        let missing = requiredFiles.filter {
+            !FileManager.default.fileExists(
+                atPath: sourceFolder.appendingPathComponent($0).path
+            )
+        }
+
+        guard missing.isEmpty else {
+            showImportError(
+                L10n.text(
+                    "缺少文件：\(missing.joined(separator: ", "))",
+                    "Missing files: \(missing.joined(separator: ", "))"
+                )
+            )
+            return
+        }
+
+        do {
+            let fileManager = FileManager.default
+            try fileManager.createDirectory(
+                at: customPetDirectory,
+                withIntermediateDirectories: true
+            )
+            let destination = customPetDirectory.appendingPathComponent(
+                "animations",
+                isDirectory: true
+            )
+            try? fileManager.removeItem(at: destination)
+            try fileManager.copyItem(at: sourceFolder, to: destination)
+            appearanceMode = .animationPack
+            saveAppearanceMode()
+            reloadAppearance()
+        } catch {
+            showImportError(error.localizedDescription)
+        }
+    }
+
+    @objc private func restoreJulieAppearance() {
+        appearanceMode = .julie
+        saveAppearanceMode()
+        reloadAppearance()
+    }
+
+    private func showImportError(_ details: String) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = L10n.text("无法导入宠物", "Could not import pet")
+        alert.informativeText = details
+        alert.addButton(withTitle: L10n.text("好", "OK"))
+        alert.runModal()
+    }
+
     @objc private func selectPetSize(_ sender: NSMenuItem) {
         let dimension = min(
             maximumPetSize,
@@ -687,25 +918,39 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func showUserGuide() {
         let alert = NSAlert()
-        alert.messageText = "DesktopCat 使用说明"
-        alert.informativeText = """
-        拖动 Julie：移动位置
-        滚动鼠标滚轮：缩放大小
-        单击：摸摸肚子
-        双击：招手
-        悬停后的 ✓：待办清单
-        悬停后的 ◷：番茄钟
-        右键或菜单栏 🐾 Julie：打开完整用户菜单
-        """
-        alert.addButton(withTitle: "知道了")
+        alert.messageText = L10n.text("DesktopCat 使用说明", "DesktopCat User Guide")
+        alert.informativeText = L10n.text(
+            """
+            拖动宠物：移动位置
+            滚动鼠标滚轮：缩放大小
+            单击：摸摸肚子
+            双击：招手
+            悬停后的 ✓：待办清单
+            悬停后的 ◷：番茄钟
+            右键或菜单栏 🐾：打开完整用户菜单
+            """,
+            """
+            Drag the pet: move it
+            Scroll over the pet: resize it
+            Single-click: belly rub
+            Double-click: wave
+            Hover ✓: To-do list
+            Hover ◷: Pomodoro timer
+            Right-click or menu-bar 🐾: full user menu
+            """
+        )
+        alert.addButton(withTitle: L10n.text("知道了", "Got it"))
         alert.runModal()
     }
 
     @objc private func showAbout() {
         let alert = NSAlert()
-        alert.messageText = "DesktopCat 1.1.1"
-        alert.informativeText = "Julie-LaoTai 的原生 macOS 桌面宠物、待办清单和番茄钟。"
-        alert.addButton(withTitle: "好")
+        alert.messageText = "DesktopCat 1.3.0"
+        alert.informativeText = L10n.text(
+            "原生 macOS 桌面宠物、待办清单和番茄钟。",
+            "A native macOS desktop pet with a to-do list and Pomodoro timer."
+        )
+        alert.addButton(withTitle: L10n.text("好", "OK"))
         alert.runModal()
     }
 

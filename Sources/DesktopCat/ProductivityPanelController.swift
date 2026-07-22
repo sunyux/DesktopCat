@@ -9,6 +9,12 @@ private struct TodoItem: Codable {
     let id: UUID
     var title: String
     var isCompleted: Bool
+    var folderID: UUID?
+}
+
+private struct TodoFolder: Codable {
+    let id: UUID
+    var name: String
 }
 
 private enum PomodoroPhase: String {
@@ -24,8 +30,8 @@ private enum PomodoroPhase: String {
 
     var title: String {
         switch self {
-        case .focus: return "专注时间"
-        case .breakTime: return "休息时间"
+        case .focus: return L10n.text("专注时间", "Focus")
+        case .breakTime: return L10n.text("休息时间", "Break")
         }
     }
 }
@@ -37,7 +43,11 @@ private final class ProductivityPanel: NSPanel {
 
 private final class TodoCellView: NSTableCellView {
     private let checkbox = NSButton(checkboxWithTitle: "", target: nil, action: nil)
-    private let deleteButton = NSButton(title: "删除", target: nil, action: nil)
+    private let deleteButton = NSButton(
+        title: L10n.text("删除", "Delete"),
+        target: nil,
+        action: nil
+    )
 
     var onToggle: (() -> Void)?
     var onDelete: (() -> Void)?
@@ -95,10 +105,13 @@ private final class TodoCellView: NSTableCellView {
 final class ProductivityPanelController: NSObject, NSTableViewDataSource, NSTableViewDelegate, NSTextFieldDelegate {
     private enum DefaultsKey {
         static let todos = "desktopCat.todos"
+        static let todoFolders = "desktopCat.todoFolders"
         static let timerPhase = "desktopCat.timer.phase"
         static let timerRemaining = "desktopCat.timer.remaining"
         static let timerEndDate = "desktopCat.timer.endDate"
         static let timerRunning = "desktopCat.timer.running"
+        static let focusMinutes = "desktopCat.timer.focusMinutes"
+        static let breakMinutes = "desktopCat.timer.breakMinutes"
     }
 
     let panel: NSPanel
@@ -110,33 +123,47 @@ final class ProductivityPanelController: NSObject, NSTableViewDataSource, NSTabl
 
     private let rootView = NSView()
     private let segmentedControl = NSSegmentedControl(
-        labels: ["待办", "番茄钟"],
+        labels: [
+            L10n.text("待办", "To-do"),
+            L10n.text("番茄钟", "Pomodoro")
+        ],
         trackingMode: .selectOne,
         target: nil,
         action: nil
     )
     private let todoContainer = NSView()
     private let timerContainer = NSView()
+    private let folderPopup = NSPopUpButton()
     private let todoInput = NSTextField()
     private let tableView = NSTableView()
     private let timerPhaseLabel = NSTextField(labelWithString: "")
     private let timerValueLabel = NSTextField(labelWithString: "25:00")
     private let timerProgress = NSProgressIndicator()
-    private let timerToggleButton = NSButton(title: "开始", target: nil, action: nil)
+    private let timerToggleButton = NSButton(
+        title: L10n.text("开始", "Start"),
+        target: nil,
+        action: nil
+    )
+    private let focusMinutesField = NSTextField()
+    private let breakMinutesField = NSTextField()
 
     private var todos: [TodoItem] = []
+    private var folders: [TodoFolder] = []
+    private var selectedFolderID: UUID?
     private var selectedTab: ProductivityTab = .todo
     private var phase: PomodoroPhase = .focus
     private var remaining: TimeInterval = PomodoroPhase.focus.duration
     private var endDate: Date?
     private var isTimerRunning = false
     private var timer: Timer?
+    private var focusMinutes = 25
+    private var breakMinutes = 5
 
     var isVisible: Bool {
         panel.isVisible
     }
 
-    init(size: NSSize = NSSize(width: 320, height: 410)) {
+    init(size: NSSize = NSSize(width: 340, height: 460)) {
         panel = ProductivityPanel(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless],
@@ -146,7 +173,9 @@ final class ProductivityPanelController: NSObject, NSTableViewDataSource, NSTabl
         super.init()
 
         configurePanel(size: size)
+        loadFolders()
         loadTodos()
+        refreshFolderPopup()
         restoreTimer()
         updateTimerDisplay()
     }
@@ -212,7 +241,9 @@ final class ProductivityPanelController: NSObject, NSTableViewDataSource, NSTabl
             .cgColor
         panel.contentView = rootView
 
-        let title = NSTextField(labelWithString: "Julie 的小助手")
+        let title = NSTextField(
+            labelWithString: L10n.text("Julie 的小助手", "Julie's Assistant")
+        )
         title.frame = NSRect(x: 18, y: size.height - 39, width: 220, height: 24)
         title.font = .systemFont(ofSize: 15, weight: .semibold)
         rootView.addSubview(title)
@@ -244,15 +275,36 @@ final class ProductivityPanelController: NSObject, NSTableViewDataSource, NSTabl
         let width = todoContainer.bounds.width
         let height = todoContainer.bounds.height
 
-        todoInput.frame = NSRect(x: 0, y: height - 34, width: width - 65, height: 28)
-        todoInput.placeholderString = "添加一个待办事项"
+        folderPopup.frame = NSRect(x: 0, y: height - 32, width: width - 76, height: 28)
+        folderPopup.target = self
+        folderPopup.action = #selector(folderChanged)
+        todoContainer.addSubview(folderPopup)
+
+        let addFolderButton = NSButton(title: "+", target: self, action: #selector(addFolder))
+        addFolderButton.frame = NSRect(x: width - 72, y: height - 33, width: 34, height: 30)
+        addFolderButton.bezelStyle = .rounded
+        addFolderButton.toolTip = L10n.text("添加文件夹", "Add folder")
+        todoContainer.addSubview(addFolderButton)
+
+        let deleteFolderButton = NSButton(title: "−", target: self, action: #selector(deleteFolder))
+        deleteFolderButton.frame = NSRect(x: width - 36, y: height - 33, width: 34, height: 30)
+        deleteFolderButton.bezelStyle = .rounded
+        deleteFolderButton.toolTip = L10n.text("删除当前文件夹", "Delete current folder")
+        todoContainer.addSubview(deleteFolderButton)
+
+        todoInput.frame = NSRect(x: 0, y: height - 70, width: width - 65, height: 28)
+        todoInput.placeholderString = L10n.text("添加一个待办事项", "Add a task")
         todoInput.delegate = self
         todoInput.target = self
         todoInput.action = #selector(addTodo)
         todoContainer.addSubview(todoInput)
 
-        let addButton = NSButton(title: "添加", target: self, action: #selector(addTodo))
-        addButton.frame = NSRect(x: width - 59, y: height - 35, width: 59, height: 30)
+        let addButton = NSButton(
+            title: L10n.text("添加", "Add"),
+            target: self,
+            action: #selector(addTodo)
+        )
+        addButton.frame = NSRect(x: width - 59, y: height - 71, width: 59, height: 30)
         addButton.bezelStyle = .rounded
         todoContainer.addSubview(addButton)
 
@@ -266,7 +318,7 @@ final class ProductivityPanelController: NSObject, NSTableViewDataSource, NSTabl
         tableView.dataSource = self
         tableView.delegate = self
 
-        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 38, width: width, height: height - 82))
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 38, width: width, height: height - 118))
         scrollView.documentView = tableView
         scrollView.hasVerticalScroller = true
         scrollView.drawsBackground = false
@@ -274,7 +326,7 @@ final class ProductivityPanelController: NSObject, NSTableViewDataSource, NSTabl
         todoContainer.addSubview(scrollView)
 
         let clearButton = NSButton(
-            title: "清除已完成",
+            title: L10n.text("清除已完成", "Clear completed"),
             target: self,
             action: #selector(clearCompleted)
         )
@@ -304,23 +356,65 @@ final class ProductivityPanelController: NSObject, NSTableViewDataSource, NSTabl
         timerProgress.maxValue = 1
         timerContainer.addSubview(timerProgress)
 
-        timerToggleButton.frame = NSRect(x: 42, y: 72, width: 94, height: 36)
+        timerToggleButton.frame = NSRect(x: 52, y: 132, width: 94, height: 36)
         timerToggleButton.bezelStyle = .rounded
         timerToggleButton.target = self
         timerToggleButton.action = #selector(toggleTimer)
         timerContainer.addSubview(timerToggleButton)
 
-        let resetButton = NSButton(title: "重置", target: self, action: #selector(resetTimer))
-        resetButton.frame = NSRect(x: width - 136, y: 72, width: 94, height: 36)
+        let resetButton = NSButton(
+            title: L10n.text("重置", "Reset"),
+            target: self,
+            action: #selector(resetTimer)
+        )
+        resetButton.frame = NSRect(x: width - 146, y: 132, width: 94, height: 36)
         resetButton.bezelStyle = .rounded
         timerContainer.addSubview(resetButton)
 
-        let hint = NSTextField(labelWithString: "专注 25 分钟 · 休息 5 分钟")
-        hint.frame = NSRect(x: 0, y: 28, width: width, height: 22)
-        hint.alignment = .center
-        hint.textColor = .secondaryLabelColor
-        hint.font = .systemFont(ofSize: 12)
-        timerContainer.addSubview(hint)
+        let durationTitle = NSTextField(
+            labelWithString: L10n.text("自定义分钟数", "Custom minutes")
+        )
+        durationTitle.frame = NSRect(x: 0, y: 94, width: width, height: 22)
+        durationTitle.alignment = .center
+        durationTitle.textColor = .secondaryLabelColor
+        durationTitle.font = .systemFont(ofSize: 12)
+        timerContainer.addSubview(durationTitle)
+
+        let focusLabel = NSTextField(labelWithString: L10n.text("专注", "Focus"))
+        focusLabel.frame = NSRect(x: 18, y: 54, width: 46, height: 24)
+        timerContainer.addSubview(focusLabel)
+
+        focusMinutesField.frame = NSRect(x: 66, y: 52, width: 54, height: 26)
+        focusMinutesField.alignment = .right
+        focusMinutesField.formatter = minuteFormatter(maximum: 180)
+        timerContainer.addSubview(focusMinutesField)
+
+        let breakLabel = NSTextField(labelWithString: L10n.text("休息", "Break"))
+        breakLabel.frame = NSRect(x: 138, y: 54, width: 46, height: 24)
+        timerContainer.addSubview(breakLabel)
+
+        breakMinutesField.frame = NSRect(x: 186, y: 52, width: 54, height: 26)
+        breakMinutesField.alignment = .right
+        breakMinutesField.formatter = minuteFormatter(maximum: 60)
+        timerContainer.addSubview(breakMinutesField)
+
+        let saveButton = NSButton(
+            title: L10n.text("保存", "Save"),
+            target: self,
+            action: #selector(saveTimerDurations)
+        )
+        saveButton.frame = NSRect(x: width - 70, y: 50, width: 68, height: 30)
+        saveButton.bezelStyle = .rounded
+        timerContainer.addSubview(saveButton)
+    }
+
+    private func minuteFormatter(maximum: Int) -> NumberFormatter {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .none
+        formatter.minimum = 1
+        formatter.maximum = NSNumber(value: maximum)
+        formatter.allowsFloats = false
+        return formatter
     }
 
     private func updateSelectedTab() {
@@ -338,40 +432,131 @@ final class ProductivityPanelController: NSObject, NSTableViewDataSource, NSTabl
         close()
     }
 
+    private var visibleTodos: [TodoItem] {
+        guard let selectedFolderID else { return todos }
+        return todos.filter { $0.folderID == selectedFolderID }
+    }
+
+    @objc private func folderChanged() {
+        let index = folderPopup.indexOfSelectedItem
+        selectedFolderID = index <= 0 ? nil : folders[index - 1].id
+        tableView.reloadData()
+    }
+
+    @objc private func addFolder() {
+        let alert = NSAlert()
+        alert.messageText = L10n.text("新建文件夹", "New folder")
+        alert.informativeText = L10n.text("输入文件夹名称。", "Enter a folder name.")
+        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
+        input.placeholderString = L10n.text("例如：工作", "For example: Work")
+        alert.accessoryView = input
+        alert.addButton(withTitle: L10n.text("创建", "Create"))
+        alert.addButton(withTitle: L10n.text("取消", "Cancel"))
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let name = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+
+        let folder = TodoFolder(id: UUID(), name: name)
+        folders.append(folder)
+        selectedFolderID = folder.id
+        saveFolders()
+        refreshFolderPopup()
+        tableView.reloadData()
+    }
+
+    @objc private func deleteFolder() {
+        guard
+            let selectedFolderID,
+            let folder = folders.first(where: { $0.id == selectedFolderID })
+        else {
+            NSSound.beep()
+            return
+        }
+
+        let alert = NSAlert()
+        alert.messageText = L10n.text(
+            "删除“\(folder.name)”？",
+            "Delete “\(folder.name)”?"
+        )
+        alert.informativeText = L10n.text(
+            "文件夹中的任务会移到收件箱。",
+            "Tasks in this folder will move to Inbox."
+        )
+        alert.addButton(withTitle: L10n.text("删除", "Delete"))
+        alert.addButton(withTitle: L10n.text("取消", "Cancel"))
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+        let inbox = folders.first(where: { $0.id != selectedFolderID })
+        for index in todos.indices where todos[index].folderID == selectedFolderID {
+            todos[index].folderID = inbox?.id
+        }
+        folders.removeAll(where: { $0.id == selectedFolderID })
+        if folders.isEmpty {
+            folders = [
+                TodoFolder(id: UUID(), name: L10n.text("收件箱", "Inbox"))
+            ]
+        }
+        self.selectedFolderID = nil
+        saveFolders()
+        saveTodos()
+        refreshFolderPopup()
+        tableView.reloadData()
+    }
+
     @objc private func addTodo() {
         let title = todoInput.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else { return }
 
-        todos.append(TodoItem(id: UUID(), title: title, isCompleted: false))
+        let folderID = selectedFolderID ?? folders.first?.id
+        todos.append(
+            TodoItem(
+                id: UUID(),
+                title: title,
+                isCompleted: false,
+                folderID: folderID
+            )
+        )
         todoInput.stringValue = ""
         saveTodos()
         tableView.reloadData()
     }
 
     @objc private func clearCompleted() {
-        todos.removeAll(where: \.isCompleted)
+        if let selectedFolderID {
+            todos.removeAll {
+                $0.folderID == selectedFolderID && $0.isCompleted
+            }
+        } else {
+            todos.removeAll(where: \.isCompleted)
+        }
         saveTodos()
         tableView.reloadData()
     }
 
     func numberOfRows(in tableView: NSTableView) -> Int {
-        todos.count
+        visibleTodos.count
     }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        guard todos.indices.contains(row) else { return nil }
+        let displayedTodos = visibleTodos
+        guard displayedTodos.indices.contains(row) else { return nil }
+        let item = displayedTodos[row]
 
         let cell = TodoCellView(frame: NSRect(x: 0, y: 0, width: tableView.bounds.width, height: 34))
-        cell.configure(with: todos[row])
+        cell.configure(with: item)
         cell.onToggle = { [weak self] in
-            guard let self, self.todos.indices.contains(row) else { return }
-            self.todos[row].isCompleted.toggle()
+            guard
+                let self,
+                let index = self.todos.firstIndex(where: { $0.id == item.id })
+            else { return }
+            self.todos[index].isCompleted.toggle()
             self.saveTodos()
             self.tableView.reloadData()
         }
         cell.onDelete = { [weak self] in
-            guard let self, self.todos.indices.contains(row) else { return }
-            self.todos.remove(at: row)
+            guard let self else { return }
+            self.todos.removeAll(where: { $0.id == item.id })
             self.saveTodos()
             self.tableView.reloadData()
         }
@@ -387,6 +572,12 @@ final class ProductivityPanelController: NSObject, NSTableViewDataSource, NSTabl
             return
         }
         todos = decoded
+        if let inboxID = folders.first?.id {
+            for index in todos.indices where todos[index].folderID == nil {
+                todos[index].folderID = inboxID
+            }
+            saveTodos()
+        }
     }
 
     private func saveTodos() {
@@ -394,14 +585,59 @@ final class ProductivityPanelController: NSObject, NSTableViewDataSource, NSTabl
         UserDefaults.standard.set(data, forKey: DefaultsKey.todos)
     }
 
+    private func loadFolders() {
+        if
+            let data = UserDefaults.standard.data(forKey: DefaultsKey.todoFolders),
+            let decoded = try? JSONDecoder().decode([TodoFolder].self, from: data),
+            !decoded.isEmpty
+        {
+            folders = decoded
+        } else {
+            folders = [
+                TodoFolder(id: UUID(), name: L10n.text("收件箱", "Inbox"))
+            ]
+            saveFolders()
+        }
+    }
+
+    private func saveFolders() {
+        guard let data = try? JSONEncoder().encode(folders) else { return }
+        UserDefaults.standard.set(data, forKey: DefaultsKey.todoFolders)
+    }
+
+    private func refreshFolderPopup() {
+        folderPopup.removeAllItems()
+        folderPopup.addItem(withTitle: L10n.text("全部任务", "All tasks"))
+        folders.forEach { folderPopup.addItem(withTitle: $0.name) }
+
+        if
+            let selectedFolderID,
+            let index = folders.firstIndex(where: { $0.id == selectedFolderID })
+        {
+            folderPopup.selectItem(at: index + 1)
+        } else {
+            folderPopup.selectItem(at: 0)
+        }
+    }
+
+    private var phaseDuration: TimeInterval {
+        TimeInterval(
+            (phase == .focus ? focusMinutes : breakMinutes) * 60
+        )
+    }
+
     private func restoreTimer() {
         let defaults = UserDefaults.standard
+        let savedFocus = defaults.integer(forKey: DefaultsKey.focusMinutes)
+        let savedBreak = defaults.integer(forKey: DefaultsKey.breakMinutes)
+        focusMinutes = savedFocus > 0 ? min(savedFocus, 180) : 25
+        breakMinutes = savedBreak > 0 ? min(savedBreak, 60) : 5
         phase = PomodoroPhase(
             rawValue: defaults.string(forKey: DefaultsKey.timerPhase) ?? ""
         ) ?? .focus
 
         let savedRemaining = defaults.double(forKey: DefaultsKey.timerRemaining)
-        remaining = savedRemaining > 0 ? savedRemaining : phase.duration
+        remaining = savedRemaining > 0 ? savedRemaining : phaseDuration
         isTimerRunning = defaults.bool(forKey: DefaultsKey.timerRunning)
 
         if isTimerRunning {
@@ -411,7 +647,7 @@ final class ProductivityPanelController: NSObject, NSTableViewDataSource, NSTabl
                 startTicking()
             } else {
                 isTimerRunning = false
-                remaining = phase.duration
+                remaining = phaseDuration
                 endDate = nil
             }
         }
@@ -451,7 +687,7 @@ final class ProductivityPanelController: NSObject, NSTableViewDataSource, NSTabl
     @objc private func resetTimer() {
         isTimerRunning = false
         endDate = nil
-        remaining = phase.duration
+        remaining = phaseDuration
         timer?.invalidate()
         timer = nil
         persistTimer()
@@ -488,7 +724,7 @@ final class ProductivityPanelController: NSObject, NSTableViewDataSource, NSTabl
         isTimerRunning = false
         endDate = nil
         phase = phase == .focus ? .breakTime : .focus
-        remaining = phase.duration
+        remaining = phaseDuration
         NSSound.beep()
         persistTimer()
         updateTimerDisplay()
@@ -500,15 +736,37 @@ final class ProductivityPanelController: NSObject, NSTableViewDataSource, NSTabl
         let seconds = max(0, Int(ceil(remaining)))
         timerPhaseLabel.stringValue = phase.title
         timerValueLabel.stringValue = String(format: "%02d:%02d", seconds / 60, seconds % 60)
-        timerToggleButton.title = isTimerRunning ? "暂停" : "开始"
-        timerProgress.doubleValue = 1 - (remaining / phase.duration)
+        timerToggleButton.title = isTimerRunning
+            ? L10n.text("暂停", "Pause")
+            : L10n.text("开始", "Start")
+        timerProgress.doubleValue = 1 - (remaining / phaseDuration)
+        focusMinutesField.integerValue = focusMinutes
+        breakMinutesField.integerValue = breakMinutes
     }
 
     private func persistTimer() {
         let defaults = UserDefaults.standard
+        defaults.set(focusMinutes, forKey: DefaultsKey.focusMinutes)
+        defaults.set(breakMinutes, forKey: DefaultsKey.breakMinutes)
         defaults.set(phase.rawValue, forKey: DefaultsKey.timerPhase)
         defaults.set(remaining, forKey: DefaultsKey.timerRemaining)
         defaults.set(endDate?.timeIntervalSince1970 ?? 0, forKey: DefaultsKey.timerEndDate)
         defaults.set(isTimerRunning, forKey: DefaultsKey.timerRunning)
+    }
+
+    @objc private func saveTimerDurations() {
+        let newFocus = min(max(focusMinutesField.integerValue, 1), 180)
+        let newBreak = min(max(breakMinutesField.integerValue, 1), 60)
+        focusMinutes = newFocus
+        breakMinutes = newBreak
+
+        isTimerRunning = false
+        endDate = nil
+        timer?.invalidate()
+        timer = nil
+        remaining = phaseDuration
+        persistTimer()
+        updateTimerDisplay()
+        onTimerRunningChanged?(false)
     }
 }

@@ -26,18 +26,19 @@ Julie 大多数时间会躺着休息，偶尔缓慢走动。位置和大小会�
 ### 待办清单
 
 1. 悬停 Julie 后点击 `✓`，或从用户菜单选择“效率工具 → 待办清单”。
-2. 输入内容并按 Return 或点击“添加”。
-3. 勾选任务可以标记完成；使用“删除”移除单项。
-4. “清除已完成”会一次移除所有已完成任务。
+2. 使用顶部的 `+` 创建工作、生活等文件夹，使用 `−` 删除当前文件夹。
+3. 选择文件夹后，输入内容并按 Return 或点击“添加”。
+4. 勾选任务可以标记完成；使用“删除”移除单项。
+5. “清除已完成”会移除当前文件夹中的已完成任务；选择“全部任务”时会清理所有文件夹。
 
 待办事项保存在本机，不会上传到网络。
 
 ### 番茄钟
 
 1. 悬停 Julie 后点击 `◷`，或从用户菜单选择“效率工具 → 番茄钟”。
-2. 点击“开始”启动 25 分钟专注时间。
-3. 可以随时暂停或重置。
-4. 专注结束后自动切换为 5 分钟休息，并播放提示音。
+2. 在底部输入自定义的专注和休息分钟数，然后点击“保存”。
+3. 点击“开始”启动计时；可以随时暂停或重置。
+4. 专注结束后自动切换为休息阶段，并播放提示音。
 
 计时状态会自动保存，重新打开应用后可以继续。
 
@@ -52,6 +53,32 @@ Julie 大多数时间会躺着休息，偶尔缓慢走动。位置和大小会�
 - 回到屏幕中央
 - 使用说明与关于
 - 退出应用
+
+### 更换宠物
+
+从用户菜单选择“宠物外观”：
+
+- **选择单张图片**：支持 PNG、JPEG 或 GIF。透明背景 PNG 效果最佳；该图片会作为静态宠物显示。
+- **导入动画包文件夹**：文件夹必须包含以下全部 GIF：
+
+```text
+idle.gif
+running-left.gif
+running-right.gif
+waving.gif
+jumping.gif
+failed.gif
+waiting.gif
+running.gif
+review.gif
+belly.gif
+todo-loaf.gif
+timer-yawn.gif
+```
+
+- **恢复 Julie**：切换回应用内置的 Julie 动画。
+
+自定义宠物会复制到本机 Application Support，原始文件可以安全移动或删除。
 
 ### 常见问题
 
@@ -94,11 +121,11 @@ Julie rests most of the time and occasionally walks slowly. Her size and positio
 
 ### To-do list
 
-Open the `✓` panel, type a task, and press Return. Tasks can be completed, deleted, or cleared in a batch. All tasks remain local to your Mac.
+Open the `✓` panel. Use `+` and `−` to create or remove folders, select a folder, then add tasks. Tasks can be completed, deleted, filtered by folder, or cleared in a batch. All tasks remain local to your Mac.
 
 ### Pomodoro timer
 
-Open the `◷` panel for a 25-minute focus session followed by a 5-minute break. The timer supports start, pause, and reset, and restores its state after relaunch.
+Open the `◷` panel, enter custom focus and break minutes, and click **Save**. The timer supports start, pause, and reset, and restores its settings and state after relaunch.
 
 ### User menu
 
@@ -110,6 +137,18 @@ Click `🐾 Julie` in the menu bar or right-click Julie to access:
 - Pause/resume movement
 - Reset to screen center
 - Help, About, and Quit
+
+Menus and panels automatically use Chinese when macOS prefers Chinese; otherwise they use English.
+
+### Change the pet
+
+Open **Pet appearance** from the user menu:
+
+- **Choose a single image** for a static pet. Transparent PNG works best; JPEG and GIF are also supported.
+- **Import an animation-pack folder** containing all twelve GIF filenames listed in the Chinese section above.
+- **Restore Julie** to return to the built-in animations.
+
+Imported files are copied into the app's Application Support directory, so their original location is no longer required.
 
 ### Reset saved data
 
