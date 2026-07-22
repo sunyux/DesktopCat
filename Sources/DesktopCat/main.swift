@@ -223,6 +223,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panel: PetPanel!
     private var petView: PetView!
     private var productivityController: ProductivityPanelController!
+    private var companionManager: CompanionPetManager!
+    private let calendarManager = CalendarManager()
     private var statusItem: NSStatusItem!
     private var timer: Timer?
 
@@ -241,8 +243,10 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         restorePetSize()
         createPanel()
         createProductivityPanel()
+        companionManager = CompanionPetManager()
         createStatusItem()
         installScreenObservers()
+        calendarManager.start()
         enterIdle(for: 10.0)
 
         timer = Timer.scheduledTimer(
@@ -380,6 +384,30 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         toolsItem.submenu = toolsMenu
         menu.addItem(toolsItem)
 
+        let calendarTitle = L10n.text("日历", "Calendar")
+        let calendarItem = NSMenuItem(title: calendarTitle, action: nil, keyEquivalent: "")
+        let calendarMenu = NSMenu(title: calendarTitle)
+        calendarMenu.addItem(
+            menuItem(
+                L10n.text("连接 macOS / Google 日历", "Connect macOS / Google Calendar"),
+                action: #selector(connectCalendar)
+            )
+        )
+        calendarMenu.addItem(
+            menuItem(
+                L10n.text("查看近期事件", "View upcoming events"),
+                action: #selector(showUpcomingEvents)
+            )
+        )
+        calendarMenu.addItem(
+            menuItem(
+                L10n.text("关闭日历提醒", "Disable calendar reminders"),
+                action: #selector(disconnectCalendar)
+            )
+        )
+        calendarItem.submenu = calendarMenu
+        menu.addItem(calendarItem)
+
         let appearanceTitle = L10n.text("宠物外观", "Pet appearance")
         let appearanceItem = NSMenuItem(title: appearanceTitle, action: nil, keyEquivalent: "")
         let appearanceMenu = NSMenu(title: appearanceTitle)
@@ -395,6 +423,12 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
                 action: #selector(importAnimationPack)
             )
         )
+        appearanceMenu.addItem(
+            menuItem(
+                L10n.text("复制 AI 宠物提示词", "Copy AI pet prompt"),
+                action: #selector(copyAIPetPrompt)
+            )
+        )
         appearanceMenu.addItem(.separator())
         appearanceMenu.addItem(
             menuItem(
@@ -404,6 +438,28 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         appearanceItem.submenu = appearanceMenu
         menu.addItem(appearanceItem)
+
+        let multiplePetsTitle = L10n.text("多只宠物", "Multiple pets")
+        let multiplePetsItem = NSMenuItem(
+            title: multiplePetsTitle,
+            action: nil,
+            keyEquivalent: ""
+        )
+        let multiplePetsMenu = NSMenu(title: multiplePetsTitle)
+        multiplePetsMenu.addItem(
+            menuItem(
+                L10n.text("添加陪伴宠物…", "Add companion pet…"),
+                action: #selector(addCompanionPet)
+            )
+        )
+        multiplePetsMenu.addItem(
+            menuItem(
+                L10n.text("移除所有陪伴宠物", "Remove all companion pets"),
+                action: #selector(removeAllCompanionPets)
+            )
+        )
+        multiplePetsItem.submenu = multiplePetsMenu
+        menu.addItem(multiplePetsItem)
 
         let sizeTitle = L10n.text("宠物大小", "Pet size")
         let sizeItem = NSMenuItem(title: sizeTitle, action: nil, keyEquivalent: "")
@@ -801,6 +857,79 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         toggleProductivityPanel(.timer)
     }
 
+    @objc private func connectCalendar() {
+        calendarManager.connect { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let events):
+                self.showCalendarEvents(
+                    events,
+                    heading: L10n.text(
+                        "日历已连接",
+                        "Calendar connected"
+                    )
+                )
+            case .failure(let error):
+                let alert = NSAlert()
+                alert.alertStyle = .warning
+                alert.messageText = L10n.text(
+                    "无法连接日历",
+                    "Could not connect Calendar"
+                )
+                alert.informativeText = error.localizedDescription
+                alert.addButton(withTitle: L10n.text("好", "OK"))
+                alert.runModal()
+            }
+        }
+    }
+
+    @objc private func showUpcomingEvents() {
+        guard calendarManager.isEnabled else {
+            connectCalendar()
+            return
+        }
+        showCalendarEvents(
+            calendarManager.upcomingEvents(),
+            heading: L10n.text("未来 7 天", "Next 7 days")
+        )
+    }
+
+    @objc private func disconnectCalendar() {
+        calendarManager.disconnect()
+        let alert = NSAlert()
+        alert.messageText = L10n.text(
+            "日历提醒已关闭",
+            "Calendar reminders disabled"
+        )
+        alert.addButton(withTitle: L10n.text("好", "OK"))
+        alert.runModal()
+    }
+
+    private func showCalendarEvents(
+        _ events: [UpcomingCalendarEvent],
+        heading: String
+    ) {
+        let formatter = DateFormatter()
+        formatter.locale = Locale.current
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+
+        let lines = events.prefix(10).map { event in
+            let time = event.isAllDay
+                ? L10n.text("全天", "All day")
+                : formatter.string(from: event.startDate)
+            return "• \(time) — \(event.title) (\(event.calendarTitle))"
+        }
+
+        let alert = NSAlert()
+        alert.messageText = heading
+        alert.informativeText = lines.isEmpty
+            ? L10n.text("没有近期事件。", "No upcoming events.")
+            : lines.joined(separator: "\n")
+        alert.addButton(withTitle: L10n.text("好", "OK"))
+        alert.runModal()
+    }
+
     @objc private func chooseStaticPetImage() {
         let picker = NSOpenPanel()
         picker.title = L10n.text("选择宠物图片", "Choose a pet image")
@@ -841,6 +970,62 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             showImportError(error.localizedDescription)
         }
+    }
+
+    @objc private func addCompanionPet() {
+        let picker = NSOpenPanel()
+        picker.title = L10n.text("选择陪伴宠物图片", "Choose a companion pet image")
+        picker.message = L10n.text(
+            "推荐使用透明背景的 PNG 图片。",
+            "A PNG with a transparent background works best."
+        )
+        picker.allowedContentTypes = [.png, .jpeg, .gif]
+        picker.canChooseFiles = true
+        picker.canChooseDirectories = false
+        picker.allowsMultipleSelection = false
+        guard picker.runModal() == .OK, let source = picker.url else { return }
+
+        let nameAlert = NSAlert()
+        nameAlert.messageText = L10n.text("宠物名字", "Pet name")
+        let suggestedName = source.deletingPathExtension().lastPathComponent
+        let input = NSTextField(
+            string: suggestedName.isEmpty
+                ? L10n.text("新宠物", "New pet")
+                : suggestedName
+        )
+        input.frame = NSRect(x: 0, y: 0, width: 240, height: 24)
+        nameAlert.accessoryView = input
+        nameAlert.addButton(withTitle: L10n.text("添加", "Add"))
+        nameAlert.addButton(withTitle: L10n.text("取消", "Cancel"))
+        guard nameAlert.runModal() == .alertFirstButtonReturn else { return }
+
+        let name = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            try companionManager.addPet(
+                name: name.isEmpty ? L10n.text("新宠物", "New pet") : name,
+                sourceImage: source
+            )
+        } catch {
+            showImportError(error.localizedDescription)
+        }
+    }
+
+    @objc private func removeAllCompanionPets() {
+        guard companionManager.count > 0 else {
+            NSSound.beep()
+            return
+        }
+
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = L10n.text(
+            "移除所有陪伴宠物？",
+            "Remove all companion pets?"
+        )
+        alert.addButton(withTitle: L10n.text("移除", "Remove"))
+        alert.addButton(withTitle: L10n.text("取消", "Cancel"))
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        companionManager.removeAll()
     }
 
     @objc private func importAnimationPack() {
@@ -897,6 +1082,34 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         appearanceMode = .julie
         saveAppearanceMode()
         reloadAppearance()
+    }
+
+    @objc private func copyAIPetPrompt() {
+        let prompt = """
+        Create one clean full-body desktop-pet sprite based faithfully on my attached pet photos. Preserve the exact species, face, eye color, nose color, fur markings, age, and body proportions. Use a compact readable silhouette, show the entire pet with generous padding, and keep natural detail readable at 220x220 pixels.
+
+        Pose: comfortably resting, facing slightly toward the viewer.
+        Background: fully transparent.
+
+        Do not add scenery, floor, shadows, text, borders, props, glow, loose particles, extra limbs, or accessories not present in the references.
+
+        Output: square PNG, 1024x1024, transparent background.
+        """
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(prompt, forType: .string)
+
+        let alert = NSAlert()
+        alert.messageText = L10n.text(
+            "AI 宠物提示词已复制",
+            "AI pet prompt copied"
+        )
+        alert.informativeText = L10n.text(
+            "把提示词和宠物照片一起粘贴到图片生成工具中。",
+            "Paste it into an image generator together with your pet photos."
+        )
+        alert.addButton(withTitle: L10n.text("好", "OK"))
+        alert.runModal()
     }
 
     private func showImportError(_ details: String) {

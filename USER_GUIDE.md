@@ -80,6 +80,28 @@ timer-yawn.gif
 
 自定义宠物会复制到本机 Application Support，原始文件可以安全移动或删除。
 
+完整的生成提示词和动画文件规范请查看 [AI 宠物生成指南](AI_PET_GUIDE.md)。用户菜单中的“复制 AI 宠物提示词”也可以直接复制静态宠物提示词。
+
+### 多只宠物
+
+1. 从用户菜单选择“多只宠物 → 添加陪伴宠物”。
+2. 选择透明 PNG、JPEG 或 GIF，并输入宠物名字。
+3. 可以重复添加多只宠物；它们会同时显示并偶尔独立走动。
+4. 每只宠物都可以独立拖动、滚轮缩放和右键移除。
+
+陪伴宠物和位置会自动保存，下次启动时恢复。
+
+### Google 日历和会议提醒
+
+DesktopCat 使用 macOS Calendar，因此无需单独提供 Google 密码或 API 密钥：
+
+1. 先在 macOS“系统设置 → 互联网账户”中添加 Google 账户，并启用日历。
+2. 从 DesktopCat 用户菜单选择“日历 → 连接 macOS / Google 日历”。
+3. 允许日历和通知权限。
+4. DesktopCat 会显示未来 7 天的事件，并在非全天事件开始前 10 分钟发送通知。
+
+选择“查看近期事件”可随时查看最多 10 个近期事件；“关闭日历提醒”会停止安排新通知。
+
 ### 常见问题
 
 **为什么看不到 Julie？**
@@ -149,6 +171,23 @@ Open **Pet appearance** from the user menu:
 - **Restore Julie** to return to the built-in animations.
 
 Imported files are copied into the app's Application Support directory, so their original location is no longer required.
+
+See [Create Your Own DesktopCat Pet with AI](AI_PET_GUIDE.md) for complete prompts and animation-pack requirements. The user menu can also copy the static-image prompt directly.
+
+### Multiple pets
+
+Choose **Multiple pets → Add companion pet…**, select a transparent PNG, JPEG, or GIF, and enter a name. Repeat to show several pets simultaneously. Every companion can be dragged, resized with the scroll wheel, and removed from its right-click menu. Companions and their positions restore after relaunch.
+
+### Google Calendar and meeting notifications
+
+DesktopCat integrates through macOS Calendar, so it never needs your Google password or a Google API key:
+
+1. Add your Google account under macOS **System Settings → Internet Accounts** and enable Calendar.
+2. Choose **Calendar → Connect macOS / Google Calendar** in DesktopCat.
+3. Approve Calendar and notification access.
+4. DesktopCat shows events from the next seven days and notifies you ten minutes before non-all-day events.
+
+Use **View upcoming events** to see the next ten events, or **Disable calendar reminders** to stop scheduling notifications.
 
 ### Reset saved data
 

@@ -583,6 +583,7 @@ final class ProductivityPanelController: NSObject, NSTableViewDataSource, NSTabl
     private func saveTodos() {
         guard let data = try? JSONEncoder().encode(todos) else { return }
         UserDefaults.standard.set(data, forKey: DefaultsKey.todos)
+        UserDefaults.standard.synchronize()
     }
 
     private func loadFolders() {
@@ -603,6 +604,7 @@ final class ProductivityPanelController: NSObject, NSTableViewDataSource, NSTabl
     private func saveFolders() {
         guard let data = try? JSONEncoder().encode(folders) else { return }
         UserDefaults.standard.set(data, forKey: DefaultsKey.todoFolders)
+        UserDefaults.standard.synchronize()
     }
 
     private func refreshFolderPopup() {

@@ -17,13 +17,17 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.3.0</string>
+    <string>1.4.0</string>
     <key>CFBundleVersion</key>
-    <string>5</string>
+    <string>6</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>LSUIElement</key>
     <true/>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>DesktopCat uses Calendar access to show upcoming meetings and notify you 10 minutes before they begin.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>DesktopCat uses Calendar access to show upcoming meetings and notify you 10 minutes before they begin.</string>
     <key>NSHighResolutionCapable</key>
     <true/>
 </dict>

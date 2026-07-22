@@ -13,6 +13,9 @@ A native macOS desktop pet featuring Julie-LaoTai, with a local to-do list and P
 - Attached productivity panel and complete menu-bar user menu
 - Automatic English/Chinese UI based on the macOS language
 - Custom pets from one image or a complete DesktopCat animation pack
+- Multiple simultaneous companion pets with independent movement and sizing
+- Upcoming meeting reminders from macOS Calendar, including synced Google calendars
+- Copyable AI prompt templates for creating your own pet artwork
 - Local-only storage with no analytics, accounts, or network access
 
 ## Download
@@ -25,7 +28,9 @@ Requires macOS 13 or later on Apple Silicon.
 
 ## User manual
 
-Read the bilingual [DesktopCat User Guide](USER_GUIDE.md) for complete installation, controls, productivity tools, menus, and troubleshooting.
+Read the bilingual [DesktopCat User Guide](USER_GUIDE.md) for complete installation, controls, productivity tools, calendars, menus, and troubleshooting.
+
+To create replacement pet artwork, see [Create Your Own DesktopCat Pet with AI](AI_PET_GUIDE.md).
 
 ## Build from source
 
